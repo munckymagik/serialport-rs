@@ -33,8 +33,6 @@ extern crate libudev;
 extern crate nix;
 #[cfg(unix)]
 extern crate ioctl_rs as ioctl;
-#[cfg(unix)]
-extern crate termios;
 #[cfg(windows)]
 extern crate kernel32;
 #[cfg(windows)]

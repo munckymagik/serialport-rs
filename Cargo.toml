@@ -17,12 +17,11 @@ appveyor = { repository = "Susurrus/serialport-rs", service = "gitlab" }
 argparse = "0.2"
 
 [dependencies]
-libc = "0.2.1"
+libc = { path = "../libc" }
 
 [target."cfg(unix)".dependencies]
 ioctl-rs = "0.1.5"
-nix = { git = "https://github.com/nix-rust/nix" }
-termios = "0.2.2"
+nix = { path = "../nix" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 libudev = "0.2.0"

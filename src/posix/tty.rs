@@ -8,23 +8,13 @@ use std::time::Duration;
 
 use ioctl;
 use libc::{self, c_int, c_void, size_t};
-#[cfg(target_os = "linux")]
 use libudev;
-use termios;
+use nix::sys::termios;
+#[cfg(target_os = "linux")]
 
 use {BaudRate, DataBits, FlowControl, Parity, SerialPort, SerialPortInfo, SerialPortSettings,
      StopBits};
 use {Error, ErrorKind};
-
-
-#[cfg(target_os = "linux")]
-const O_NOCTTY: c_int = 0x00000100;
-
-#[cfg(target_os = "macos")]
-const O_NOCTTY: c_int = 0x00020000;
-
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
-const O_NOCTTY: c_int = 0;
 
 
 /// A TTY-based serial port implementation.
@@ -57,12 +47,13 @@ impl TTYPort {
     /// * `InvalidInput` if `path` is not a valid device name.
     /// * `Io` for any other error while opening or initializing the device.
     pub fn open(path: &Path, settings: &SerialPortSettings) -> ::Result<TTYPort> {
-        use libc::{O_RDWR, O_NONBLOCK, F_SETFL, EINVAL};
-        use termios::{CREAD, CLOCAL}; // cflags
-        use termios::{cfmakeraw, tcgetattr, tcsetattr, tcflush};
-        use termios::{TCSANOW, TCIOFLUSH};
+        use libc::{O_RDWR, O_NOCTTY, O_NONBLOCK, F_SETFL, EINVAL};
+        use self::termios::{CREAD, CLOCAL}; // cflags
+        use self::termios::{cfmakeraw, tcgetattr, tcsetattr, tcflush};
+        use self::termios::SetArg::TCSANOW;
+        use self::termios::FlushArg::TCIOFLUSH;
 
-        let cstr = match CString::new(path.as_os_str().as_bytes()) {
+        let cstr = CString::new(path.as_os_str().as_bytes()) {
             Ok(s) => s,
             Err(_) => return Err(super::error::from_raw_os_error(EINVAL)),
         };
@@ -72,7 +63,7 @@ impl TTYPort {
             return Err(super::error::last_os_error());
         }
 
-        let mut termios = match termios::Termios::from_fd(fd) {
+        let mut termios = match tcgetattr(fd) {
             Ok(t) => t,
             Err(e) => return Err(super::error::from_io_error(e)),
         };
@@ -92,10 +83,7 @@ impl TTYPort {
 
         // Read back settings from port and confirm they were applied correctly
         // TODO: Switch this to an all-zeroed termios struct
-        let mut actual_termios = termios;
-        if let Err(err) = tcgetattr(fd, &mut actual_termios) {
-            return Err(super::error::from_io_error(err));
-        }
+        let actual_termios = tcgetattr(fd)?;
         if actual_termios != termios {
             return Err(Error::new(ErrorKind::Unknown, "Settings did not apply correctly"));
         }
@@ -161,8 +149,9 @@ impl TTYPort {
     }
 
     fn write_settings(&self) -> ::Result<()> {
-        use termios::{tcsetattr, tcflush};
-        use termios::{TCSANOW, TCIOFLUSH};
+        use self::termios::{tcsetattr, tcflush};
+        use self::termios::SetArg::TCSANOW;
+        use self::termios::FlushArg::TCIOFLUSH;
 
         if let Err(err) = tcsetattr(self.fd, TCSANOW, &self.termios) {
             return Err(super::error::from_io_error(err));
@@ -284,7 +273,7 @@ impl IntoRawFd for TTYPort {
 impl FromRawFd for TTYPort {
     unsafe fn from_raw_fd(fd: RawFd) -> Self {
 
-        let termios = termios::Termios::from_fd(fd).expect("Unable to retrieve termios settings.");
+        let termios = self::termios::tcgetattr(fd).expect("Unable to retrieve termios settings.");
 
         // Try to set exclusive, as is the default setting.  Catch errors.. this method MUST
         // return a TTYPort so we'll just indicate non-exclusive on an error here.
@@ -356,23 +345,8 @@ impl SerialPort for TTYPort {
     }
 
     fn baud_rate(&self) -> Option<BaudRate> {
-        use termios::{cfgetospeed, cfgetispeed};
-        use termios::{B50, B75, B110, B134, B150, B200, B300, B600, B1200, B1800, B2400, B4800,
-                      B9600, B19200, B38400};
-        use termios::os::target::{B57600, B115200, B230400};
-
-        #[cfg(target_os = "linux")]
-        use termios::os::linux::{B460800, B500000, B576000, B921600, B1000000, B1152000, B1500000,
-                                 B2000000, B2500000, B3000000, B3500000, B4000000};
-
-        #[cfg(target_os = "macos")]
-        use termios::os::macos::{B7200, B14400, B28800, B76800};
-
-        #[cfg(target_os = "freebsd")]
-        use termios::os::freebsd::{B7200, B14400, B28800, B76800, B460800, B921600};
-
-        #[cfg(target_os = "openbsd")]
-        use termios::os::openbsd::{B7200, B14400, B28800, B76800};
+        use self::termios::{cfgetospeed, cfgetispeed};
+        use self::termios::BaudRate::*;
 
         let ospeed = cfgetospeed(&self.termios);
         let ispeed = cfgetispeed(&self.termios);
@@ -438,7 +412,7 @@ impl SerialPort for TTYPort {
     }
 
     fn data_bits(&self) -> Option<DataBits> {
-        use termios::{CSIZE, CS5, CS6, CS7, CS8};
+        use self::termios::{CSIZE, CS5, CS6, CS7, CS8};
 
         match self.termios.c_cflag & CSIZE {
             CS8 => Some(DataBits::Eight),
@@ -451,8 +425,7 @@ impl SerialPort for TTYPort {
     }
 
     fn flow_control(&self) -> Option<FlowControl> {
-        use termios::{IXON, IXOFF};
-        use termios::os::target::CRTSCTS;
+        use self::termios::{CRTSCTS, IXON, IXOFF};
 
         if self.termios.c_cflag & CRTSCTS != 0 {
             Some(FlowControl::Hardware)
@@ -464,7 +437,7 @@ impl SerialPort for TTYPort {
     }
 
     fn parity(&self) -> Option<Parity> {
-        use termios::{PARENB, PARODD};
+        use self::termios::{PARENB, PARODD};
 
         if self.termios.c_cflag & PARENB != 0 {
             if self.termios.c_cflag & PARODD != 0 {
@@ -478,7 +451,7 @@ impl SerialPort for TTYPort {
     }
 
     fn stop_bits(&self) -> Option<StopBits> {
-        use termios::CSTOPB;
+        use self::termios::CSTOPB;
 
         if self.termios.c_cflag & CSTOPB != 0 {
             Some(StopBits::Two)
@@ -503,23 +476,8 @@ impl SerialPort for TTYPort {
 
     fn set_baud_rate(&mut self, baud_rate: BaudRate) -> ::Result<()> {
         use libc::EINVAL;
-        use termios::cfsetspeed;
-        use termios::{B50, B75, B110, B134, B150, B200, B300, B600, B1200, B1800, B2400, B4800,
-                      B9600, B19200, B38400};
-        use termios::os::target::{B57600, B115200, B230400};
-
-        #[cfg(target_os = "linux")]
-        use termios::os::linux::{B460800, B500000, B576000, B921600, B1000000, B1152000, B1500000,
-                                 B2000000, B2500000, B3000000, B3500000, B4000000};
-
-        #[cfg(target_os = "macos")]
-        use termios::os::macos::{B7200, B14400, B28800, B76800};
-
-        #[cfg(target_os = "freebsd")]
-        use termios::os::freebsd::{B7200, B14400, B28800, B76800, B460800, B921600};
-
-        #[cfg(target_os = "openbsd")]
-        use termios::os::openbsd::{B7200, B14400, B28800, B76800};
+        use self::termios::cfsetspeed;
+        use self::termios::BaudRate::*;
 
         let baud = match baud_rate {
             BaudRate::BaudOther(50) => B50,
@@ -581,7 +539,7 @@ impl SerialPort for TTYPort {
     }
 
     fn set_data_bits(&mut self, data_bits: DataBits) -> ::Result<()> {
-        use termios::{CSIZE, CS5, CS6, CS7, CS8};
+        use self::termios::{CS5, CS6, CS7, CS8, CSIZE};
 
         let size = match data_bits {
             DataBits::Five => CS5,
@@ -596,8 +554,7 @@ impl SerialPort for TTYPort {
     }
 
     fn set_flow_control(&mut self, flow_control: FlowControl) -> ::Result<()> {
-        use termios::{IXON, IXOFF};
-        use termios::os::target::CRTSCTS;
+        use self::termios::{CRTSCTS, IXON, IXOFF};
 
         match flow_control {
             FlowControl::None => {
@@ -617,7 +574,7 @@ impl SerialPort for TTYPort {
     }
 
     fn set_parity(&mut self, parity: Parity) -> ::Result<()> {
-        use termios::{PARENB, PARODD, INPCK, IGNPAR};
+        use self::termios::{PARENB, PARODD, INPCK, IGNPAR};
 
         match parity {
             Parity::None => {
@@ -641,7 +598,7 @@ impl SerialPort for TTYPort {
     }
 
     fn set_stop_bits(&mut self, stop_bits: StopBits) -> ::Result<()> {
-        use termios::CSTOPB;
+        use self::termios::CSTOPB;
 
         match stop_bits {
             StopBits::Two => self.termios.c_cflag &= !CSTOPB,
