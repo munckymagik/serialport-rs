@@ -1,8 +1,12 @@
 use std::io;
 use std::ptr;
 
-use kernel32::{FormatMessageW, GetLastError};
-use winapi::*;
+use winapi::shared::minwindef::*;
+use winapi::shared::ntdef::WCHAR;
+use winapi::shared::winerror::*;
+use winapi::um::fileapi::*;
+use winapi::um::winbase::*;
+use winapi::um::winnt::*;
 
 pub fn last_os_error() -> ::Error {
     let errno = errno();

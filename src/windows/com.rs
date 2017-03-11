@@ -7,12 +7,16 @@ use std::os::windows::prelude::*;
 use std::ptr;
 use std::time::Duration;
 
-use advapi32::*;
-use kernel32::*;
-use setupapi::*;
-use winapi::*;
+use winapi::shared::guiddef::*;
+use winapi::shared::minwindef::*;
+use winapi::shared::ntdef::CHAR;
+use winapi::shared::winerror::*;
+use winapi::um::fileapi::*;
+use winapi::um::handleapi::*;
+use winapi::um::setupapi::*;
+use winapi::um::winbase::*;
+use winapi::um::winnt::*;
 
-use super::ffi::*;
 use {BaudRate, DataBits, FlowControl, Parity, SerialPort, SerialPortInfo, SerialPortSettings,
      StopBits};
 use {Error, ErrorKind};
@@ -292,7 +296,7 @@ impl SerialPort for COMPort {
     }
 
     fn parity(&self) -> Option<Parity> {
-        let parity: u32 = self.inner.Parity as u32;
+        let parity = self.inner.Parity;
         match parity {
             ODDPARITY => Some(Parity::Odd),
             EVENPARITY => Some(Parity::Even),
@@ -302,7 +306,7 @@ impl SerialPort for COMPort {
     }
 
     fn stop_bits(&self) -> Option<StopBits> {
-        let stop_bits: u32 = self.inner.StopBits as u32;
+        let stop_bits = self.inner.StopBits;
         match stop_bits {
             TWOSTOPBITS => Some(StopBits::Two),
             ONESTOPBIT => Some(StopBits::One),
