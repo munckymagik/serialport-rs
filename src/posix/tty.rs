@@ -1,4 +1,3 @@
-use std::ffi::CStr;
 #[cfg(target_os = "linux")]
 use std::ffi::OsStr;
 use std::io;
@@ -106,9 +105,7 @@ impl TTYPort {
         };
 
         // get exclusive access to device
-        if let Err(err) = ioctl::tiocexcl(port.fd) {
-            return Err(err.into());
-        }
+        ioctl::tiocexcl(port.fd)?;
 
         // clear O_NONBLOCK flag
         fcntl(port.fd, F_SETFL(nix::fcntl::OFlag::empty()))?;
@@ -205,43 +202,22 @@ impl TTYPort {
     /// let (master, slave) = TTYPort::pair().unwrap();
     /// ```
     pub fn pair() -> ::Result<(Self, Self)> {
+        use nix::fcntl::O_RDWR;
 
         // Open the next free pty.
-        let next_pty_fd = unsafe { libc::posix_openpt(libc::O_RDWR) };
-        if next_pty_fd < 0 {
-            return Err(nix::Error::last().into());
-        }
+        let next_pty_fd = nix::pty::posix_openpt(O_RDWR)?;
 
         // Grant access to the associated slave pty
-        if unsafe { libc::grantpt(next_pty_fd) } < 0 {
-            unsafe { libc::close(next_pty_fd) };
-            return Err(nix::Error::last().into());
-        }
+        nix::pty::grantpt(next_pty_fd)?;
 
         // Unlock the slave pty
-        if unsafe { libc::unlockpt(next_pty_fd) } < 0 {
-            unsafe { libc::close(next_pty_fd) };
-            return Err(nix::Error::last().into());
-        }
+        nix::pty::unlockpt(next_pty_fd)?;
 
         // Get the path of the attached slave ptty
-        let ptty_name_ptr = unsafe { libc::ptsname(next_pty_fd) };
-        if ptty_name_ptr.is_null() {
-            unsafe { libc::close(next_pty_fd) };
-            return Err(nix::Error::last().into());
-        }
-
-        let ptty_name_cstr = unsafe { CStr::from_ptr(ptty_name_ptr) };
-        let ptty_name = match ptty_name_cstr.to_str() {
-            Ok(s) => s,
-            Err(_) => {
-                unsafe { libc::close(next_pty_fd) };
-                return Err(nix::Error::last().into());
-            }
-        };
+        let ptty_name = nix::pty::ptsname(next_pty_fd)?;
 
         // Open the slave port using default settings
-        let slave_tty = TTYPort::open(Path::new(ptty_name), &Default::default())?;
+        let slave_tty = TTYPort::open(Path::new(&ptty_name), &Default::default())?;
 
         // Manually construct the master port here because the
         // `Termios::from_fd()` doesn't work on Mac, Solaris, and maybe other
