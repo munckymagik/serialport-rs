@@ -19,10 +19,10 @@ travis = { repository = "Susurrus/serialport-rs" }
 argparse = "0.2"
 
 [dependencies]
-libc = "0.2.18"
+#libc = "0.2.25"
+libc = { git = "https://github.com/rust-lang/libc" }
 
 [target."cfg(unix)".dependencies]
-ioctl-rs = "0.1.5"
 nix = { git = "https://github.com/nix-rust/nix" }
 termios = "0.2.2"
 

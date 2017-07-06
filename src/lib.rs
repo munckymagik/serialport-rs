@@ -31,8 +31,6 @@ extern crate libc;
 extern crate libudev;
 #[cfg(unix)]
 extern crate nix;
-#[cfg(unix)]
-extern crate ioctl_rs as ioctl;
 #[cfg(target_os = "macos")]
 extern crate IOKit_sys;
 #[cfg(target_os = "macos")]
