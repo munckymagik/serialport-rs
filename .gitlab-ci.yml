@@ -1,70 +1,48 @@
-variables:
-    APT_CACHE_DIR: apt-cache
-
-cache:
-    untracked: true
-    paths:
-    - apt-cache/
-    - cargo/
-    - target/
+image: "scorpil/rust:stable"
 
 stages:
   - build
-  - test
+
+cache:
+  key: "$CI_JOB_NAME"
 
 before_script:
-    - mkdir -pv $APT_CACHE_DIR
-    - apt-get -qq update
-    - apt-get -o dir::cache::archives="$APT_CACHE_DIR" -qq -y install build-essential curl git libudev-dev pkg-config
-    - export PATH="/root/.cargo/bin:$PATH"
-    - git submodule update --init --recursive
-    - cargo update
+  - set -e
+  - apt-get -qq update
+  - apt-get -qq -y install build-essential curl git libudev-dev pkg-config
+  - export PATH="/root/.cargo/bin:$PATH"
+  - sh ci/install.sh
 
-build:1.13:
-    image: "scorpil/rust:1.13"
-    stage: build
-    script:
-    - cargo build --verbose
+after_script:
+  - set +e
 
-build:stable:
-    image: "scorpil/rust:stable"
-    stage: build
-    script:
-    - cargo build --verbose
+variables:
+  TRAVIS_OS_NAME: "linux"
 
-build:nightly:
-    image: "scorpil/rust:nightly"
-    stage: build
-    allow_failure: true
-    script:
-    - cargo build --verbose
+i686_unknown_linux_gnu:
+  script:
+  - bash ci/script.sh
+  stage: build
+  variables:
+    TARGET: "i686-unknown-linux-gnu"
 
-test:stable:
-    image: "scorpil/rust:stable"
-    stage: test
-    script:
-    - cargo test --verbose
+i686_unknown_linux_musl:
+  script:
+  - bash ci/script.sh
+  stage: build
+  variables:
+    TARGET: "i686-unknown-linux-musl"
 
-test:rustfmt:
-    image: "scorpil/rust:stable"
-    stage: test
-    allow_failure: true
-    script:
-    - cargo install rustfmt
-    - cargo fmt -- --write-mode=diff
+i686_unknown_freebsd:
+  script:
+  - bash ci/script.sh
+  stage: build
+  variables:
+    TARGET: "i686-unknown-freebsd"
 
-test:clippy:
-    image: "debian:stable-slim"
-    stage: test
-    allow_failure: true
-    script:
-    - export RUST_ARCHIVE=rust-nightly-x86_64-unknown-linux-gnu.tar.gz
-    - export RUST_DOWNLOAD_URL=https://static.rust-lang.org/dist/$RUST_ARCHIVE
-    - curl -fsOSL $RUST_DOWNLOAD_URL
-    - curl -s $RUST_DOWNLOAD_URL.sha256 | sha256sum -c -
-    - tar -xzf $RUST_ARCHIVE --strip-components=1
-    - ./install.sh
-    - cargo build --verbose
-    - cargo install clippy
-# Turn all warnings into errors
-    - cargo clippy -- -D warnings
+mipsel_unknown_linux_gnu:
+  script:
+  - bash ci/script.sh
+  stage: build
+  variables:
+    TARGET: "mipsel-unknown-linux-gnu"
