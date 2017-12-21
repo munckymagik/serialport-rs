@@ -54,7 +54,7 @@ test:rustfmt:
     allow_failure: true
     script:
     - cargo update
-    - cargo install rustfmt
+    - cargo install rustfmt-nightly
     - cargo fmt -- --write-mode=diff
 
 test:clippy:
