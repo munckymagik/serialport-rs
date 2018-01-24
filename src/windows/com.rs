@@ -22,7 +22,7 @@ use winapi::um::winbase::*;
 use winapi::um::winnt::{FILE_ATTRIBUTE_NORMAL, GENERIC_READ, GENERIC_WRITE, HANDLE, KEY_READ};
 use winapi::um::winreg::*;
 
-use {BaudRate, DataBits, FlowControl, Parity, SerialPort, SerialPortInfo, SerialPortSettings,
+use {DataBits, FlowControl, Parity, SerialPort, SerialPortInfo, SerialPortSettings,
      StopBits};
 use {Error, ErrorKind};
 
@@ -283,24 +283,8 @@ impl SerialPort for COMPort {
         self.read_pin(MS_RLSD_ON)
     }
 
-    fn baud_rate(&self) -> Option<BaudRate> {
-        match self.inner.BaudRate {
-            CBR_110 => Some(BaudRate::Baud110),
-            CBR_300 => Some(BaudRate::Baud300),
-            CBR_600 => Some(BaudRate::Baud600),
-            CBR_1200 => Some(BaudRate::Baud1200),
-            CBR_2400 => Some(BaudRate::Baud2400),
-            CBR_4800 => Some(BaudRate::Baud4800),
-            CBR_9600 => Some(BaudRate::Baud9600),
-            CBR_14400 => Some(BaudRate::Baud14400),
-            CBR_19200 => Some(BaudRate::Baud19200),
-            CBR_38400 => Some(BaudRate::Baud38400),
-            CBR_57600 => Some(BaudRate::Baud57600),
-            CBR_115200 => Some(BaudRate::Baud115200),
-            CBR_128000 => Some(BaudRate::Baud128000),
-            CBR_256000 => Some(BaudRate::Baud256000),
-            n => Some(BaudRate::BaudOther(n as u32)),
-        }
+    fn baud_rate(&self) -> Option<u32> {
+        Some(self.inner.BaudRate as u32)
     }
 
     fn data_bits(&self) -> Option<DataBits> {
@@ -352,24 +336,8 @@ impl SerialPort for COMPort {
         Ok(())
     }
 
-    fn set_baud_rate(&mut self, baud_rate: BaudRate) -> ::Result<()> {
-        self.inner.BaudRate = match baud_rate {
-            BaudRate::Baud110 => CBR_110,
-            BaudRate::Baud300 => CBR_300,
-            BaudRate::Baud600 => CBR_600,
-            BaudRate::Baud1200 => CBR_1200,
-            BaudRate::Baud2400 => CBR_2400,
-            BaudRate::Baud4800 => CBR_4800,
-            BaudRate::Baud9600 => CBR_9600,
-            BaudRate::Baud14400 => CBR_14400,
-            BaudRate::Baud19200 => CBR_19200,
-            BaudRate::Baud38400 => CBR_38400,
-            BaudRate::Baud57600 => CBR_57600,
-            BaudRate::Baud115200 => CBR_115200,
-            BaudRate::Baud128000 => CBR_128000,
-            BaudRate::Baud256000 => CBR_256000,
-            BaudRate::BaudOther(n) => n as DWORD,
-        };
+    fn set_baud_rate(&mut self, baud_rate: u32) -> ::Result<()> {
+        self.inner.BaudRate = baud_rate as DWORD;
 
         self.write_settings()
     }
@@ -684,10 +652,4 @@ pub fn available_ports() -> ::Result<Vec<SerialPortInfo>> {
         }
     }
     Ok(ports)
-}
-
-/// Return a list of offically-supported baud rates. It is likely that the hardware supports
-/// more baud rates than this (many support arbitrary baud rates).
-pub fn available_baud_rates() -> Vec<u32> {
-    vec![110, 300, 600, 1200, 2400, 4800, 9600, 14_400, 19_200, 38_400, 57_600, 115_200, 128_000, 256_000]
 }

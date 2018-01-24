@@ -23,8 +23,8 @@ use nix;
 use nix::unistd;
 use nix::fcntl::fcntl;
 
-use {BaudRate, DataBits, FlowControl, Parity, SerialPort, SerialPortInfo, SerialPortSettings,
-     SerialPortType, StopBits, UsbPortInfo};
+use {DataBits, FlowControl, Parity, SerialPort, SerialPortInfo, SerialPortSettings,
+     StopBits};
 use {Error, ErrorKind};
 
 /// Convenience method for removing exclusive access from
@@ -265,7 +265,7 @@ impl TTYPort {
                       target_os = "android",
                       target_os = "emscripten",
                       target_os = "fuchsia")))]
-        let ptty_name = nix::pty::ptsname(&next_pty_fd)?;
+        let ptty_name = unsafe { nix::pty::ptsname(&next_pty_fd)? };
 
         #[cfg(any(target_os = "linux",
                   target_os = "android",
@@ -288,72 +288,6 @@ impl TTYPort {
         };
 
         Ok((master_tty, slave_tty))
-    }
-
-    fn set_baud_rate_nowrite(&mut self, baud_rate: BaudRate) -> ::Result<()> {
-        use nix::sys::termios::cfsetspeed;
-        use nix::sys::termios::BaudRate::*;
-
-        let baud = match baud_rate {
-            BaudRate::Baud50 => B50,
-            BaudRate::Baud75 => B75,
-            BaudRate::Baud110 => B110,
-            BaudRate::Baud134 => B134,
-            BaudRate::Baud150 => B150,
-            BaudRate::Baud200 => B200,
-            BaudRate::Baud300 => B300,
-            BaudRate::Baud600 => B600,
-            BaudRate::Baud1200 => B1200,
-            BaudRate::Baud1800 => B1800,
-            BaudRate::Baud2400 => B2400,
-            BaudRate::Baud4800 => B4800,
-            #[cfg(any(target_os = "freebsd", target_os = "dragonfly", target_os = "macos",
-                      target_os = "netbsd", target_os = "openbsd"))]
-            BaudRate::Baud7200 => B7200,
-            BaudRate::Baud9600 => B9600,
-            #[cfg(any(target_os = "freebsd", target_os = "dragonfly", target_os = "macos",
-                      target_os = "netbsd", target_os = "openbsd"))]
-            BaudRate::Baud14400 => B14400,
-            BaudRate::Baud19200 => B19200,
-            #[cfg(any(target_os = "freebsd", target_os = "dragonfly", target_os = "macos",
-                      target_os = "netbsd", target_os = "openbsd"))]
-            BaudRate::Baud28800 => B28800,
-            BaudRate::Baud38400 => B38400,
-            BaudRate::Baud57600 => B57600,
-            #[cfg(any(target_os = "freebsd", target_os = "dragonfly", target_os = "macos",
-                      target_os = "netbsd", target_os = "openbsd"))]
-            BaudRate::Baud76800 => B76800,
-            BaudRate::Baud115200 => B115200,
-            BaudRate::Baud230400 => B230400,
-            #[cfg(any(target_os = "android", target_os = "freebsd", target_os = "linux"))]
-            BaudRate::Baud460800 => B460800,
-            #[cfg(any(target_os = "android", target_os = "linux"))]
-            BaudRate::Baud500000 => B500000,
-            #[cfg(any(target_os = "android", target_os = "linux"))]
-            BaudRate::Baud576000 => B576000,
-            #[cfg(any(target_os = "android", target_os = "linux", target_os = "netbsd"))]
-            BaudRate::Baud921600 => B921600,
-            #[cfg(any(target_os = "android", target_os = "linux"))]
-            BaudRate::Baud1000000 => B1000000,
-            #[cfg(any(target_os = "android", target_os = "linux"))]
-            BaudRate::Baud1152000 => B1152000,
-            #[cfg(any(target_os = "android", target_os = "linux"))]
-            BaudRate::Baud1500000 => B1500000,
-            #[cfg(any(target_os = "android", target_os = "linux"))]
-            BaudRate::Baud2000000 => B2000000,
-            #[cfg(any(target_os = "android", target_os = "linux"))]
-            BaudRate::Baud2500000 => B2500000,
-            #[cfg(any(target_os = "android", target_os = "linux"))]
-            BaudRate::Baud3000000 => B3000000,
-            #[cfg(any(target_os = "android", target_os = "linux"))]
-            BaudRate::Baud3500000 => B3500000,
-            #[cfg(any(target_os = "android", target_os = "linux"))]
-            BaudRate::Baud4000000 => B4000000,
-
-            BaudRate::BaudOther(_) => return Err(nix::Error::from_errno(nix::errno::Errno::EINVAL).into()),
-        };
-
-        cfsetspeed(&mut self.termios, baud).map_err(|e| e.into())
     }
 
     fn set_data_bits_nowrite(&mut self, data_bits: DataBits) -> ::Result<()> {
@@ -516,84 +450,31 @@ impl SerialPort for TTYPort {
         }
     }
 
-    fn baud_rate(&self) -> Option<BaudRate> {
+    #[cfg(any(target_os = "android", target_os = "linux"))]
+    fn baud_rate(&self) -> Option<u32> {
+        if let Ok(options) = ioctl::tcgets2(self.fd) {
+            assert!(options.c_ispeed == options.c_ospeed);
+            Some(options.c_ospeed)
+        } else {
+            None
+        }
+    }
+
+    #[cfg(any(target_os = "dragonflybsd",
+              target_os = "freebsd",
+              target_os = "ios",
+              target_os = "macos",
+              target_os = "netbsd",
+              target_os = "openbsd"))]
+    fn baud_rate(&self) -> Option<u32> {
         use nix::sys::termios::{cfgetospeed, cfgetispeed};
-        use nix::sys::termios::BaudRate::{B50, B75, B110, B134, B150, B200, B300, B600, B1200, B1800, B2400, B4800,
-                      B9600, B19200, B38400, B57600, B115200, B230400};
-
-        #[cfg(any(target_os = "linux", target_os = "android"))]
-        use nix::sys::termios::BaudRate::{B460800, B500000, B576000, B921600, B1000000, B1152000, B1500000,
-                                 B2000000, B2500000, B3000000, B3500000, B4000000};
-
-        #[cfg(target_os = "macos")]
-        use nix::sys::termios::BaudRate::{B7200, B14400, B28800, B76800};
-
-        #[cfg(target_os = "freebsd")]
-        use nix::sys::termios::BaudRate::{B7200, B14400, B28800, B76800, B460800, B921600};
-
-        #[cfg(target_os = "openbsd")]
-        use nix::sys::termios::BaudRate::{B7200, B14400, B28800, B76800};
 
         let ospeed = cfgetospeed(&self.termios);
         let ispeed = cfgetispeed(&self.termios);
 
-        if ospeed != ispeed {
-            return None;
-        }
+        assert!(ospeed == ispeed);
 
-        match ospeed {
-            B50 => Some(BaudRate::BaudOther(50)),
-            B75 => Some(BaudRate::BaudOther(75)),
-            B110 => Some(BaudRate::Baud110),
-            B134 => Some(BaudRate::BaudOther(134)),
-            B150 => Some(BaudRate::BaudOther(150)),
-            B200 => Some(BaudRate::BaudOther(200)),
-            B300 => Some(BaudRate::Baud300),
-            B600 => Some(BaudRate::Baud600),
-            B1200 => Some(BaudRate::Baud1200),
-            B1800 => Some(BaudRate::BaudOther(1800)),
-            B2400 => Some(BaudRate::Baud2400),
-            B4800 => Some(BaudRate::Baud4800),
-            #[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd"))]
-            B7200 => Some(BaudRate::BaudOther(7200)),
-            B9600 => Some(BaudRate::Baud9600),
-            #[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd"))]
-            B14400 => Some(BaudRate::BaudOther(14_400)),
-            B19200 => Some(BaudRate::Baud19200),
-            #[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd"))]
-            B28800 => Some(BaudRate::BaudOther(28_800)),
-            B38400 => Some(BaudRate::Baud38400),
-            B57600 => Some(BaudRate::Baud57600),
-            #[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd"))]
-            B76800 => Some(BaudRate::BaudOther(76_800)),
-            B115200 => Some(BaudRate::Baud115200),
-            B230400 => Some(BaudRate::BaudOther(230_400)),
-            #[cfg(any(target_os = "android", target_os = "linux", target_os = "freebsd"))]
-            B460800 => Some(BaudRate::BaudOther(460_800)),
-            #[cfg(any(target_os = "android", target_os = "linux"))]
-            B500000 => Some(BaudRate::BaudOther(500_000)),
-            #[cfg(any(target_os = "android", target_os = "linux"))]
-            B576000 => Some(BaudRate::BaudOther(576_000)),
-            #[cfg(any(target_os = "android", target_os = "linux", target_os = "freebsd"))]
-            B921600 => Some(BaudRate::BaudOther(921_600)),
-            #[cfg(any(target_os = "android", target_os = "linux"))]
-            B1000000 => Some(BaudRate::BaudOther(1_000_000)),
-            #[cfg(any(target_os = "android", target_os = "linux"))]
-            B1152000 => Some(BaudRate::BaudOther(1_152_000)),
-            #[cfg(any(target_os = "android",target_os = "linux"))]
-            B1500000 => Some(BaudRate::BaudOther(1_500_000)),
-            #[cfg(any(target_os = "android", target_os = "linux"))]
-            B2000000 => Some(BaudRate::BaudOther(2_000_000)),
-            #[cfg(any(target_os = "android", target_os = "linux"))]
-            B2500000 => Some(BaudRate::BaudOther(2_500_000)),
-            #[cfg(any(target_os = "android", target_os = "linux"))]
-            B3000000 => Some(BaudRate::BaudOther(3_000_000)),
-            #[cfg(any(target_os = "android", target_os = "linux"))]
-            B3500000 => Some(BaudRate::BaudOther(3_500_000)),
-            #[cfg(any(target_os = "android", target_os = "linux"))]
-            B4000000 => Some(BaudRate::BaudOther(4_000_000)),
-            _ => None,
-        }
+        Some(ospeed as u32)
     }
 
     fn data_bits(&self) -> Option<DataBits> {
@@ -650,7 +531,7 @@ impl SerialPort for TTYPort {
     }
 
     fn set_all(&mut self, settings: &SerialPortSettings) -> ::Result<()> {
-        self.set_baud_rate_nowrite(settings.baud_rate)?;
+        self.set_baud_rate(settings.baud_rate)?;
         self.set_data_bits_nowrite(settings.data_bits)?;
         self.set_flow_control_nowrite(settings.flow_control)?;
         self.set_parity_nowrite(settings.parity)?;
@@ -661,8 +542,32 @@ impl SerialPort for TTYPort {
         Ok(())
     }
 
-    fn set_baud_rate(&mut self, baud_rate: BaudRate) -> ::Result<()> {
-        self.set_baud_rate_nowrite(baud_rate)?;
+    #[cfg(any(target_os = "android", target_os = "linux"))]
+    fn set_baud_rate(&mut self, baud_rate: u32) -> ::Result<()> {
+        let mut options = ioctl::tcgets2(self.fd)?;
+
+        options.c_cflag &= !nix::libc::CBAUD;
+        options.c_cflag |= nix::libc::BOTHER;
+        options.c_ispeed = baud_rate;
+        options.c_ospeed = baud_rate;
+
+        ioctl::tcsets2(self.fd, &options)
+    }
+
+    // This functions uses the standard BSD way of setting a custom baud rate by using the literal
+    // value. This is because of [Chromium bug #337482], which seems to indicate support for the
+    // IOSSIOSPEED ioctl is spotty.
+    // [Chromium bug #337482]: https://bugs.chromium.org/p/chromium/issues/detail?id=337482
+    #[cfg(any(target_os = "dragonflybsd",
+              target_os = "freebsd",
+              target_os = "ios",
+              target_os = "macos",
+              target_os = "netbsd",
+              target_os = "openbsd"))]
+    fn set_baud_rate(&mut self, baud_rate: u32) -> ::Result<()> {
+        use nix::sys::termios::cfsetspeed;
+
+        cfsetspeed(&mut self.termios, baud_rate)?;
         self.write_settings()
     }
 
@@ -745,11 +650,11 @@ fn udev_hex_property_as_u16(d: &libudev::Device, key: &str) -> ::Result<u16> {
 }
 
 #[cfg(target_os = "linux")]
-fn port_type(d: &libudev::Device) -> ::Result<SerialPortType> {
+fn port_type(d: &libudev::Device) -> ::Result<::SerialPortType> {
     match d.property_value("ID_BUS").and_then(OsStr::to_str) {
         Some("usb") => {
             let serial_number = udev_property_as_string(d, "ID_SERIAL_SHORT");
-            Ok(SerialPortType::UsbPort(UsbPortInfo {
+            Ok(::SerialPortType::UsbPort(::UsbPortInfo {
                                            vid: udev_hex_property_as_u16(d, "ID_VENDOR_ID")?,
                                            pid: udev_hex_property_as_u16(d, "ID_MODEL_ID")?,
                                            serial_number: serial_number,
@@ -757,8 +662,8 @@ fn port_type(d: &libudev::Device) -> ::Result<SerialPortType> {
                                            product: udev_property_as_string(d, "ID_MODEL"),
                                        }))
         }
-        Some("pci") => Ok(SerialPortType::PciPort),
-        _ => Ok(SerialPortType::Unknown),
+        Some("pci") => Ok(::SerialPortType::PciPort),
+        _ => Ok(::SerialPortType::Unknown),
     }
 }
 
@@ -888,10 +793,10 @@ fn get_string_property(device_type: io_registry_entry_t, property: &str) -> Opti
 #[cfg(target_os = "macos")]
 /// Determine the serial port type based on the service object (like that returned by
 /// `IOIteratorNext`). Specific properties are extracted for USB devices.
-fn port_type(service: io_object_t) -> SerialPortType {
+fn port_type(service: io_object_t) -> ::SerialPortType {
     let bluetooth_device_class_name = b"IOBluetoothSerialClient\0".as_ptr() as *const c_char;
     if let Some(usb_device) = get_parent_device_by_type(service, kIOUSBDeviceClassName()) {
-        SerialPortType::UsbPort(UsbPortInfo {
+        ::SerialPortType::UsbPort(::UsbPortInfo {
                                     vid: get_int_property(usb_device,
                                                           "idVendor",
                                                           kCFNumberSInt16Type)
@@ -909,9 +814,9 @@ fn port_type(service: io_object_t) -> SerialPortType {
                                     product: get_string_property(usb_device, "USB Product Name"),
                                 })
     } else if get_parent_device_by_type(service, bluetooth_device_class_name).is_some() {
-        SerialPortType::BluetoothPort
+        ::SerialPortType::BluetoothPort
     } else {
-        SerialPortType::PciPort
+        ::SerialPortType::PciPort
     }
 }
 

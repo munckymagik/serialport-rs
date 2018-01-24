@@ -7,7 +7,7 @@ use std::os::unix::prelude::*;
 use std::io::{Read, Write};
 use std::str;
 
-use serialport::{BaudRate, SerialPort};
+use serialport::SerialPort;
 use serialport::posix::TTYPort;
 
 #[test]
@@ -50,10 +50,10 @@ fn test_ttyport_set_standard_baud() {
     #![allow(unused_variables)]
     let (master, mut slave) = TTYPort::pair().expect("Unable to create ptty pair");
 
-    slave.set_baud_rate(BaudRate::Baud9600).unwrap();
-    assert_eq!(slave.baud_rate().unwrap(), BaudRate::Baud9600);
-    slave.set_baud_rate(BaudRate::Baud57600).unwrap();
-    assert_eq!(slave.baud_rate().unwrap(), BaudRate::Baud57600);
-    slave.set_baud_rate(BaudRate::Baud115200).unwrap();
-    assert_eq!(slave.baud_rate().unwrap(), BaudRate::Baud115200);
+    slave.set_baud_rate(9600).unwrap();
+    assert_eq!(slave.baud_rate().unwrap(), 9600);
+    slave.set_baud_rate(57600).unwrap();
+    assert_eq!(slave.baud_rate().unwrap(), 57600);
+    slave.set_baud_rate(115200).unwrap();
+    assert_eq!(slave.baud_rate().unwrap(), 115200);
 }
