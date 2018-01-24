@@ -53,6 +53,8 @@ pub struct TTYPort {
     timeout: Duration,
     exclusive: bool,
     port_name: Option<String>,
+    #[cfg(any(target_os = "ios", target_os = "macos"))]
+    baud_rate: u32,
 }
 
 impl TTYPort {
@@ -132,6 +134,9 @@ impl TTYPort {
             timeout: Duration::new(0, 0), // This is overwritten by the subsequent call to `set_all()`
             exclusive: true, // This is guaranteed by the above `ioctl::tiocexcl()` call
             port_name: path.to_str().map(|s| s.to_string()),
+            // This will be overwritten by subsequent call to `set_all()`
+            #[cfg(any(target_os = "ios", target_os = "macos"))]
+            baud_rate: 0,
         };
 
         // Then we try and finish setting up the port.
@@ -253,6 +258,8 @@ impl TTYPort {
             timeout: Duration::from_millis(100),
             exclusive: true,
             port_name: None,
+            #[cfg(any(target_os = "ios", target_os = "macos"))]
+            baud_rate: 0,
         };
 
         Ok((master_tty, slave_tty))
@@ -335,6 +342,8 @@ impl FromRawFd for TTYPort {
             port_name: None,
             // On Mac & iOS we can't read the baud rate, so we'll set it to 0 indicating that it's
             // unknown.
+            #[cfg(any(target_os = "ios", target_os = "macos"))]
+            baud_rate: 0,
         }
     }
 }
@@ -391,6 +400,15 @@ impl SerialPort for TTYPort {
 
     /// Returns the port's baud rate
     ///
+    /// There is no way on Mac to retrieve the actual device baud rate, so this just returns a
+    /// cached copy of whatever the last set baud rate was.
+    #[cfg(any(target_os = "ios", target_os = "macos"))]
+    fn baud_rate(&self) -> ::Result<u32> {
+        Ok(self.baud_rate)
+    }
+
+    /// Returns the port's baud rate
+    ///
     /// On some platforms this will be the actual device baud rate, which may differ from the
     /// desired baud rate.
     #[cfg(any(target_os = "android", target_os = "linux"))]
@@ -408,8 +426,6 @@ impl SerialPort for TTYPort {
     /// desired baud rate.
     #[cfg(any(target_os = "dragonflybsd",
               target_os = "freebsd",
-              target_os = "ios",
-              target_os = "macos",
               target_os = "netbsd",
               target_os = "openbsd"))]
     fn baud_rate(&self) -> ::Result<u32> {
@@ -509,17 +525,9 @@ impl SerialPort for TTYPort {
 
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     fn set_baud_rate(&mut self, baud_rate: u32) -> ::Result<()> {
-        let vec = vec![50, 75, 110, 134, 150, 200, 300, 600, 1200, 1800, 2400, 4800, 7200, 9600,
-                       14_400, 19_200, 28_800, 38_400, 57_600, 76_800, 115_200, 230_400];
-        if vec.contains(&baud_rate) {
-            let mut termios = self.get_termios()?;
-            let baud_rate: speed_t = baud_rate as speed_t;
-            let res = unsafe { libc::cfsetspeed(&mut termios, baud_rate) };
-            nix::errno::Errno::result(res)?;
-            self.set_termios(&termios)
-        } else {
-            Err(Error::new(ErrorKind::InvalidInput, "invalid baud rate"))
-        }
+        self.baud_rate = baud_rate;
+        let baud_rate: speed_t = baud_rate as speed_t;
+        ioctl::iossiospeed(self.fd, &baud_rate)
     }
 
     fn set_flow_control(&mut self, flow_control: FlowControl) -> ::Result<()> {
@@ -623,6 +631,8 @@ impl SerialPort for TTYPort {
             exclusive: self.exclusive,
             port_name: self.port_name.clone(),
             timeout: self.timeout,
+            #[cfg(any(target_os = "ios", target_os = "macos"))]
+            baud_rate: 0,
         }))
     }
 }
