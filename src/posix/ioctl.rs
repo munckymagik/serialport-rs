@@ -9,6 +9,26 @@ mod raw {
     ioctl_none_bad!(tiocexcl, libc::TIOCEXCL);
     ioctl_none_bad!(tiocnxcl, libc::TIOCNXCL);
     ioctl_read_bad!(tiocmget, libc::TIOCMGET, libc::c_int);
+
+    cfg_if! {
+        if #[cfg(any(target_os = "android", target_os = "linux"))] {
+            ioctl_read_bad!(fionread, libc::FIONREAD, libc::c_int);
+            ioctl_read_bad!(tiocoutq, libc::TIOCOUTQ, libc::c_int);
+        } else {
+            // All BSDs including macOS share the same "good" definitions for these ioctls
+
+            // See: /usr/include/sys/filio.h
+            const FIONREAD_GROUP: u8 = b'f';
+            const FIONREAD_NUMBER: u8 = 127;
+            // See: /usr/include/sys/ttycom.h
+            const TIOCOUTQ_GROUP: u8 = b't';
+            const TIOCOUTQ_NUMBER: u8 = 115;
+
+            ioctl_read!(fionread, FIONREAD_GROUP, FIONREAD_NUMBER, libc::c_int);
+            ioctl_read!(tiocoutq, TIOCOUTQ_GROUP, TIOCOUTQ_NUMBER, libc::c_int);
+        }
+    }
+
     ioctl_write_ptr_bad!(tiocmbic, libc::TIOCMBIC, libc::c_int);
     ioctl_write_ptr_bad!(tiocmbis, libc::TIOCMBIS, libc::c_int);
     ioctl_read!(
@@ -49,6 +69,20 @@ pub fn tiocmget(fd: RawFd) -> ::Result<SerialLines> {
     let mut status = unsafe { mem::uninitialized() };
     let x = unsafe { raw::tiocmget(fd, &mut status) };
     x.map(SerialLines::from_bits_truncate).map_err(|e| e.into())
+}
+
+pub fn fionread(fd: RawFd) -> ::Result<u32> {
+    let mut retval: libc::c_int = 0;
+    unsafe { raw::fionread(fd, &mut retval) }
+        .map(|_| retval as u32)
+        .map_err(|e| e.into())
+}
+
+pub fn tiocoutq(fd: RawFd) -> ::Result<u32> {
+    let mut retval: libc::c_int = 0;
+    unsafe { raw::tiocoutq(fd, &mut retval) }
+        .map(|_| retval as u32)
+        .map_err(|e| e.into())
 }
 
 pub fn tiocmbic(fd: RawFd, status: SerialLines) -> ::Result<()> {
