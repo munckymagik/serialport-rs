@@ -23,7 +23,6 @@ use winapi::um::winreg::*;
 use {DataBits, FlowControl, Parity, SerialPort, SerialPortInfo, SerialPortSettings,
      StopBits};
 use {Error, ErrorKind};
-
 /// A serial port implementation for Windows COM ports.
 ///
 /// The port will be closed when the value is dropped. However, this struct
@@ -390,6 +389,50 @@ impl SerialPort for COMPort {
         }
 
         self.set_dcb(&dcb)
+    }
+
+    fn bytes_to_read(&self) -> ::Result<i32> {
+        let mut errors: DWORD = 0;
+        let mut comstat: COMSTAT = unsafe { mem::uninitialized() };
+
+        if unsafe { ClearCommError(self.handle, &mut errors, &mut comstat) != 0 } {
+            Ok(comstat.cbInQue as u32 as i32)
+        } else {
+            Err(super::error::last_os_error())
+        }
+    }
+
+    fn bytes_to_write(&self) -> ::Result<i32> {
+        let mut errors: DWORD = 0;
+        let mut comstat: COMSTAT = unsafe { mem::uninitialized() };
+
+        if unsafe { ClearCommError(self.handle, &mut errors, &mut comstat) != 0 } {
+            Ok(comstat.cbOutQue as u32 as i32)
+        } else {
+            Err(super::error::last_os_error())
+        }
+    }
+
+    fn discard_in_buffer(&self) -> ::Result<()> {
+        const PURGE_RXABORT: DWORD = 0x0002;
+        const PURGE_RXCLEAR: DWORD = 0x0008;
+
+        if unsafe { PurgeComm(self.handle, PURGE_RXABORT | PURGE_RXCLEAR) != 0 } {
+            Ok(())
+        } else {
+            Err(super::error::last_os_error())
+        }
+    }
+
+    fn discard_out_buffer(&self) -> ::Result<()> {
+        const PURGE_TXABORT: DWORD = 0x0001;
+        const PURGE_TXCLEAR: DWORD = 0x0004;
+
+        if unsafe { PurgeComm(self.handle, PURGE_TXABORT | PURGE_TXCLEAR) != 0 } {
+            Ok(())
+        } else {
+            Err(super::error::last_os_error())
+        }
     }
 
     fn try_clone(&self) -> ::Result<Box<SerialPort>> {

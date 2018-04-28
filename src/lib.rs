@@ -417,6 +417,18 @@ pub trait SerialPort: Send + io::Read + io::Write {
     /// * `Io` for any other type of I/O error.
     fn read_carrier_detect(&mut self) -> ::Result<bool>;
 
+    /// Gets the number of bytes of data in the receive buffer.
+    fn bytes_to_read(&self) -> ::Result<i32>;
+
+    /// Gets the number of bytes of data in the send buffer.
+    fn bytes_to_write(&self) -> ::Result<i32>;
+
+    /// Discards data from the serial driver's receive buffer.
+    fn discard_in_buffer(&self) -> ::Result<()>;
+
+    /// Discards data from the serial driver's transmit buffer.
+    fn discard_out_buffer(&self) -> ::Result<()>;
+
     // Misc methods
 
     /// Attempts to clone the `SerialPort`. This allow you to write and read simultaneously from the

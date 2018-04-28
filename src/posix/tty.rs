@@ -616,6 +616,44 @@ impl SerialPort for TTYPort {
         self.read_pin(ioctl::DATA_CARRIER_DETECT)
     }
 
+    fn bytes_to_read(&self) -> ::Result<i32> {
+        let mut retval: i32 = 0;
+        let res = unsafe {
+            libc::ioctl(self.fd, libc::FIONREAD, &mut retval as *mut libc::c_int)
+        };
+
+        nix::errno::Errno::result(res)
+            .map(|_| retval)
+            .map_err(|e| e.into())
+    }
+
+    fn bytes_to_write(&self) -> ::Result<i32> {
+        let mut retval: i32 = 0;
+        let res = unsafe {
+            libc::ioctl(self.fd, libc::TIOCOUTQ, &mut retval as *mut libc::c_int)
+        };
+
+        nix::errno::Errno::result(res)
+            .map(|_| retval)
+            .map_err(|e| e.into())
+    }
+
+    fn discard_in_buffer(&self) -> ::Result<()> {
+        let res = unsafe { nix::libc::tcflush(self.fd, libc::TCIFLUSH) };
+
+        nix::errno::Errno::result(res)
+            .map(|_| ())
+            .map_err(|e| e.into())
+    }
+
+    fn discard_out_buffer(&self) -> ::Result<()> {
+        let res = unsafe { nix::libc::tcflush(self.fd, libc::TCOFLUSH) };
+
+        nix::errno::Errno::result(res)
+            .map(|_| ())
+            .map_err(|e| e.into())
+    }
+
     fn try_clone(&self) -> ::Result<Box<SerialPort>> {
         let fd_cloned: i32 = fcntl(self.fd, nix::fcntl::F_DUPFD(self.fd))?;
         Ok(Box::new(TTYPort {
