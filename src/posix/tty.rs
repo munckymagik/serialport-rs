@@ -618,6 +618,8 @@ impl SerialPort for TTYPort {
 
     fn bytes_to_read(&self) -> ::Result<i32> {
         let mut retval: i32 = 0;
+
+        // TODO consider reimplementing this in ioctl.rs using ioctl!
         let res = unsafe {
             libc::ioctl(self.fd, libc::FIONREAD, &mut retval as *mut libc::c_int)
         };
@@ -629,6 +631,8 @@ impl SerialPort for TTYPort {
 
     fn bytes_to_write(&self) -> ::Result<i32> {
         let mut retval: i32 = 0;
+
+        // TODO consider reimplementing this in ioctl.rs using ioctl!
         let res = unsafe {
             libc::ioctl(self.fd, libc::TIOCOUTQ, &mut retval as *mut libc::c_int)
         };
