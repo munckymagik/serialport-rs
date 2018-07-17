@@ -229,7 +229,7 @@ pub enum ClearBuffer {
     /// Specify to clear data written but not yet transmitted
     Output,
     /// Specify to clear both data received and data not yet transmitted
-    All
+    All,
 }
 
 /// A struct containing all serial port settings
