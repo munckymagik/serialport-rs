@@ -14,7 +14,12 @@ mod raw {
         if #[cfg(any(target_os = "android", target_os = "linux"))] {
             ioctl_read_bad!(fionread, libc::FIONREAD, libc::c_int);
             ioctl_read_bad!(tiocoutq, libc::TIOCOUTQ, libc::c_int);
-        } else if #[cfg(any(target_os = "macos", target_os = "ios", target_os = "freebsd", target_os = "dragonfly", target_os = "openbsd", target_os = "netbsd"))] {
+        } else if #[cfg(any(target_os = "macos",
+                            target_os = "ios",
+                            target_os = "freebsd",
+                            target_os = "dragonfly",
+                            target_os = "openbsd",
+                            target_os = "netbsd"))] {
             // All BSDs including macOS share the same "good" definitions for these ioctls
 
             // See: /usr/include/sys/filio.h
