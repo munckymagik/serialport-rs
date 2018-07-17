@@ -29,9 +29,6 @@ extern crate nix;
 #[cfg(unix)]
 #[macro_use]
 extern crate bitflags;
-#[cfg(unix)]
-#[macro_use]
-extern crate cfg_if;
 #[cfg(target_os = "macos")]
 extern crate CoreFoundation_sys as cf;
 #[cfg(target_os = "macos")]
