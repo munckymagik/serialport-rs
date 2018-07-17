@@ -23,6 +23,7 @@ use winapi::um::winreg::*;
 
 use {DataBits, FlowControl, Parity, SerialPort, SerialPortInfo, SerialPortSettings, StopBits};
 use {Error, ErrorKind};
+
 /// A serial port implementation for Windows COM ports.
 ///
 /// The port will be closed when the value is dropped. However, this struct
