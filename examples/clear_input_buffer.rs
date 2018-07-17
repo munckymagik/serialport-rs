@@ -80,7 +80,8 @@ fn run(port_name: &str, baud_rate: &str) -> Result<(), Box<Error>> {
     let mut settings: SerialPortSettings = Default::default();
     settings.timeout = Duration::from_millis(10);
 
-    let rate = baud_rate.parse::<u32>()
+    let rate = baud_rate
+        .parse::<u32>()
         .map_err(|_| format!("Invalid baud rate '{}' specified", baud_rate))?;
     settings.baud_rate = rate.into();
 
