@@ -3,8 +3,8 @@
 //
 // USAGE:
 //
-// 1. Connect a serial device to your host computer. E.g. an Arduino with the "Blink" sketch loaded
-//    will work
+// 1. Connect a serial device to your host computer. E.g. an Arduino could be used. It will be able
+//    to receive data without any specific sketch loaded.
 // 2. Run this example
 // 3. Observe the output - it reports how many bytes are waiting to be sent to the connected device
 // 4. Press the Return key to make the example clear the output buffer. You should see the number
