@@ -49,7 +49,7 @@ fn main() {
             .add_argument("baud", Store, "Baud rate")
             .required();
         ap.refer(&mut block_size)
-            .add_argument( "block-size", Store, &block_size_help);
+            .add_argument("block-size", Store, &block_size_help);
         ap.parse_args_or_exit();
     }
 
