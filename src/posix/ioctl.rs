@@ -18,14 +18,9 @@ mod raw {
             // All BSDs including macOS share the same "good" definitions for these ioctls
 
             // See: /usr/include/sys/filio.h
-            const FIONREAD_GROUP: u8 = b'f';
-            const FIONREAD_NUMBER: u8 = 127;
+            ioctl_read!(fionread, b'f', 127, libc::c_int);
             // See: /usr/include/sys/ttycom.h
-            const TIOCOUTQ_GROUP: u8 = b't';
-            const TIOCOUTQ_NUMBER: u8 = 115;
-
-            ioctl_read!(fionread, FIONREAD_GROUP, FIONREAD_NUMBER, libc::c_int);
-            ioctl_read!(tiocoutq, TIOCOUTQ_GROUP, TIOCOUTQ_NUMBER, libc::c_int);
+            ioctl_read!(tiocoutq, b't', 115, libc::c_int);
         }
     }
 
