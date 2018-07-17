@@ -433,11 +433,6 @@ impl SerialPort for COMPort {
     }
 
     fn clear(&self, buffer_to_clear: ::ClearBuffer) -> ::Result<()> {
-        const PURGE_RXABORT: DWORD = 0x0002;
-        const PURGE_RXCLEAR: DWORD = 0x0008;
-        const PURGE_TXABORT: DWORD = 0x0001;
-        const PURGE_TXCLEAR: DWORD = 0x0004;
-
         let buffer_flags = match buffer_to_clear {
             ::ClearBuffer::Input => PURGE_RXABORT | PURGE_RXCLEAR,
             ::ClearBuffer::Output => PURGE_TXABORT | PURGE_TXCLEAR,
